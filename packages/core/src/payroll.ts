@@ -41,8 +41,12 @@ import {
 } from "./settlement/receipt";
 import {
   validatePaymentDestination,
+  getRegisteredDestinationValidationHook,
+  setDestinationValidationHook,
+  resetDestinationValidationHook,
   type DestinationWorkflowValidation,
 } from "./settlement/destination";
+import type { DestinationValidationHook } from "./employees/payoutDestination";
 
 export {
   submitSequentialPayrollBatches,
@@ -521,5 +525,54 @@ export class PayrollService {
     options?: SettlementReceiptValidationOptions
   ): SettlementReceiptValidation {
     return validateSettlementReceiptHelper(receipt, options);
+  }
+
+  /**
+   * Registers the destination validation extension hook (#531) for every
+   * payment submitted through {@link PayrollService} in this process.
+   *
+   * The hook adds organizational destination policy (allowlists, compliance
+   * holds, internal account classification) on top of the built-in Stellar
+   * destination checks. Pass `undefined` to restore built-in validation.
+   * Hooks must never echo the rejected destination in their messages; see
+   * {@link DestinationValidationHook} for the required result shape.
+   */
+  static setDestinationValidationHook(hook?: DestinationValidationHook | null): void {
+    setDestinationValidationHook(hook);
+  }
+
+  /**
+   * Restores the default built-in destination validation, removing any
+   * process-wide extension hook registered via
+   * {@link PayrollService.setDestinationValidationHook} (#531).
+   */
+  static resetDestinationValidationHook(): void {
+    resetDestinationValidationHook();
+  }
+
+  /**
+   * Returns the currently registered destination validation extension hook,
+   * or `undefined` when built-in validation is active (#531).
+   */
+  static getDestinationValidationHook(): DestinationValidationHook | undefined {
+    return getRegisteredDestinationValidationHook();
+  }
+
+  /**
+   * Runs the destination validation gate (#531) without submitting a payment:
+   * built-in Stellar checks first, then the registered extension hook. Useful
+   * for pre-flight checks in UIs and batch tooling. Never throws and never
+   * echoes the rejected destination.
+   */
+  async validateDestination(value: unknown): Promise<DestinationWorkflowValidation> {
+    return validatePaymentDestination(value);
+  }
+
+  /**
+   * Static helper: runs the destination validation gate (#531) without a
+   * service instance. Never throws and never echoes the rejected destination.
+   */
+  static async validateDestination(value: unknown): Promise<DestinationWorkflowValidation> {
+    return validatePaymentDestination(value);
   }
 }
