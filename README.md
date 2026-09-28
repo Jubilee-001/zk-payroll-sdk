@@ -72,6 +72,46 @@ Use an idempotency key before applying retries to a write operation.
 destinations without including rejected values in error messages. The same
 validation runs automatically before `PayrollService` submits a payment.
 
+## Destination validation extension point
+
+Host applications can register a custom destination validator to add
+organizational rules — allowlists, compliance holds, internal account
+classification — on top of the built-in Stellar checks. The hook runs inside
+`PayrollService` after built-in validation and before proof generation, so
+blocked destinations never reach a submission.
+
+```typescript
+import { PayrollService } from "@zk-payroll/core";
+
+// Register an organizational destination policy
+PayrollService.setDestinationValidationHook((destination) => {
+  if (isApprovedPayoutAccount(destination)) {
+    return { ok: true, kind: "internal_treasury" };
+  }
+  // Reject with a stable code and sanitized message —
+  // never echo the rejected destination value.
+  return {
+    ok: false,
+    code: "COMPANY_DESTINATION_NOT_ALLOWED",
+    message: "Destination is not on the approved payout list.",
+  };
+});
+
+// Pre-flight check without submitting a payment
+const result = await PayrollService.validateDestination(someDestination);
+if (!result.ok) {
+  console.error(result.code, result.message); // safe to log
+}
+
+// Restore built-in-only validation
+PayrollService.resetDestinationValidationHook();
+```
+
+The gate fails closed: if the registered hook throws, the destination is
+rejected with `DESTINATION_VALIDATION_UNAVAILABLE` and the fault detail is
+discarded. Rejected values are never reflected in results, errors, progress
+events, or logs — only stable codes and sanitized, actionable messages.
+
 ## Event Stream Deduplication
 
 The SDK provides deduplication helpers to prevent processing the same payroll event more than once. This strengthens payroll workflows while keeping private salary and employee data protected.
