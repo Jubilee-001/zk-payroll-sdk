@@ -15,7 +15,7 @@
  */
 
 import {
-  defaultDestinationValidationHook,
+  validatePayoutDestination,
   type DestinationValidationHook,
   type DestinationValidationHookResult,
 } from "../employees/payoutDestination";
@@ -58,7 +58,7 @@ export type DestinationValidationHookResolver = () =>
   | null;
 
 /** Shared module-level hook registration (process-wide default). */
-let registeredHook: DestinationValidationHook | undefined | null;
+let registeredHook: DestinationValidationHook | undefined;
 
 /**
  * Register the process-wide destination validation extension hook.
@@ -106,7 +106,7 @@ export async function validatePaymentDestination(
   const hook = resolveHook ? resolveHook() : registeredHook;
 
   // Built-in pass is required before (or instead of) any extension hook runs.
-  const builtIn = defaultDestinationValidationHook(value);
+  const builtIn = validatePayoutDestination(value);
   if (!builtIn.ok) {
     return { ok: false, code: builtIn.code, message: builtIn.message, state: "rejected" };
   }

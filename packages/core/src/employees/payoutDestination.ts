@@ -65,7 +65,9 @@ export type DestinationValidationHookResult =
  * built-in {@link validatePayoutDestination} checks. Used when the host
  * application has not registered a custom validator.
  */
-export const defaultDestinationValidationHook: DestinationValidationHook = (value) => {
+export const defaultDestinationValidationHook = (
+  value: string
+): DestinationValidationHookResult => {
   const result = validatePayoutDestination(value);
   return result.ok ? { ok: true, kind: result.kind } : result;
 };
