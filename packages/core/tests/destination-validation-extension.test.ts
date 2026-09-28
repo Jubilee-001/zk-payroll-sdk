@@ -88,6 +88,30 @@ describe("Destination Validation Extension Point (#531)", () => {
       });
     });
 
+    it("accepts legacy G-prefixed references with the same exemption as built-in validation", async () => {
+      const legacy = "GCOMPANY.TREASURY.2026";
+
+      const withoutHook = await validatePaymentDestination(legacy);
+      expect(withoutHook).toEqual({
+        ok: true,
+        destination: legacy,
+        kind: "legacy_reference",
+        state: "validated",
+      });
+
+      // The hook still applies policy on top of accepted legacy references.
+      setDestinationValidationHook((value) =>
+        value === legacy
+          ? { ok: true }
+          : { ok: false, code: "COMPANY_NOT_ALLOWED", message: "Destination is not approved." }
+      );
+      const withHook = await validatePaymentDestination(legacy);
+      expect(withHook.ok).toBe(true);
+
+      const blocked = await validatePaymentDestination("GOTHER.REFERENCE");
+      expect(blocked.ok).toBe(false);
+    });
+
     it("still rejects structurally invalid destinations when a hook is registered", async () => {
       setDestinationValidationHook(() => ({ ok: true }));
 

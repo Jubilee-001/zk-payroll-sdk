@@ -52,7 +52,14 @@ export type DestinationWorkflowValidation =
     };
 
 /** Resolves the extension hook that should run for a workflow. */
-export type DestinationValidationHookResolver = () => DestinationValidationHook | undefined | null;
+export type DestinationValidationHookResolver = () => DestinationValidationHook | undefined;
+
+/**
+ * G-prefixed application-defined recipient references accepted by the SDK's
+ * validation layer (see `PayrollValidation.validatePaymentParams`). The gate
+ * applies the same exemption so existing flows are not regressed.
+ */
+const LEGACY_DESTINATION_REFERENCE = /^G[A-Z0-9.]+$/;
 
 /** Shared module-level hook registration (process-wide default). */
 let registeredHook: DestinationValidationHook | undefined;
@@ -103,15 +110,19 @@ export async function validatePaymentDestination(
   const hook = resolveHook ? resolveHook() : registeredHook;
 
   // Built-in pass is required before (or instead of) any extension hook runs.
+  // G-prefixed legacy references pass with the same exemption the SDK's
+  // validation layer has always applied, so existing flows are unchanged.
   const builtIn = validatePayoutDestination(value);
-  if (!builtIn.ok) {
+  const isLegacyReference = typeof value === "string" && LEGACY_DESTINATION_REFERENCE.test(value);
+  if (!builtIn.ok && !isLegacyReference) {
     return { ok: false, code: builtIn.code, message: builtIn.message, state: "rejected" };
   }
-  const destination = builtIn.destination;
+  const destination = builtIn.ok ? builtIn.destination : (value as string);
+  const builtInKind = builtIn.ok ? builtIn.kind : "legacy_reference";
 
   // When no custom hook is registered, the built-in check is the whole gate.
   if (!hook) {
-    return { ok: true, destination, kind: builtIn.kind, state: "validated" };
+    return { ok: true, destination, kind: builtInKind, state: "validated" };
   }
 
   // 2. Extension hook applies organizational policy on the validated value.
@@ -140,5 +151,5 @@ export async function validatePaymentDestination(
     };
   }
 
-  return { ok: true, destination, kind: hookResult.kind ?? builtIn.kind, state: "validated" };
+  return { ok: true, destination, kind: hookResult.kind ?? builtInKind, state: "validated" };
 }
