@@ -313,6 +313,43 @@ Generates a ZK proof and submits a payment transaction to the smart contract.
 - **amount**: Salary amount to pay.
 - **Returns**: Transaction hash.
 
+#### Destination validation extension point
+
+PayrollService runs a destination validation gate before proof generation and
+submission. Built-in Stellar account/muxed-account checks always run first; a
+registered extension hook adds organizational policy on top.
+
+- **`PayrollService.setDestinationValidationHook(hook?)`** — registers a
+  process-wide destination validator. The hook receives the already
+  built-in-validated destination and returns `{ ok: true, kind? }` or
+  `{ ok: false, code, message, retryable? }`. Pass `undefined` to restore
+  built-in-only validation.
+- **`PayrollService.resetDestinationValidationHook()`** — removes the
+  registered hook and restores default validation.
+- **`PayrollService.getDestinationValidationHook()`** — returns the currently
+  registered hook, or `undefined` when built-in validation is active.
+- **`service.validateDestination(value)` / `PayrollService.validateDestination(value)`**
+  — pre-flight check that runs the full gate without submitting a payment.
+  Returns `{ ok: true, destination, kind, state }` on success or
+  `{ ok: false, code, message, state, retryable? }` on failure.
+
+Result states: `validated` (passed all checks), `rejected` (failed a check),
+`unavailable` (the hook itself failed — the gate fails closed and discards the
+fault detail). Rejected destinations are never echoed in messages, errors,
+progress events, or logs.
+
+```typescript
+PayrollService.setDestinationValidationHook((destination) =>
+  isApprovedPayoutAccount(destination)
+    ? { ok: true, kind: "internal_treasury" }
+    : { ok: false, code: "COMPANY_DESTINATION_NOT_ALLOWED", message: "Destination is not on the approved payout list." }
+);
+
+const gate = await PayrollService.validateDestination(recipient);
+if (!gate.ok) {
+  console.error(gate.code, gate.message); // safe to log
+}
+```
 #### `evaluateFailedPayoutRetryEligibility(input): FailedPayoutRetryEligibility`
 Checks whether an individual failed payout is safe to retry. The input includes its normalized transaction status, failure classification, attempt count, maximum attempts, and idempotency key. Retry is allowed only for a retryable failure while attempts remain and an idempotency key is present. The result provides a stable code and generic guidance; it never returns the key or reflects raw failure details.
 
