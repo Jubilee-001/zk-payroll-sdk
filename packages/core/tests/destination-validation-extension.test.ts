@@ -165,4 +165,67 @@ describe("Destination Validation Extension Point (#531)", () => {
       ).rejects.toThrow("compliance hold");
     });
   });
+
+  describe("privacy guarantees", () => {
+    it("never echoes rejected destinations into gate results", async () => {
+      const secret = "GA7QYNF7SOWQXGLAVE7QWDNJTPAEJUZGMVC6CXG5DG5G2A7TVZQCJORE";
+      setDestinationValidationHook(() => ({
+        ok: false,
+        code: "COMPANY_NOT_ALLOWED",
+        message: "Destination is not approved.",
+      }));
+
+      const result = await validatePaymentDestination(secret);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(JSON.stringify(result)).not.toContain(secret);
+        expect(result.message).not.toContain("GA7Q");
+      }
+    });
+
+    it("never echoes rejected destinations into service errors or progress events", async () => {
+      const secret = "GA7QYNF7SOWQXGLAVE7QWDNJTPAEJUZGMVC6CXG5DG5G2A7TVZQCJORE";
+      const service = new PayrollService(
+        {} as never,
+        {} as never,
+        { sign: jest.fn(), getPublicKey: () => "G..." } as never,
+        "testnet"
+      );
+      const progressEvents: unknown[] = [];
+
+      setDestinationValidationHook(() => ({
+        ok: false,
+        code: "COMPANY_DESTINATION_ON_HOLD",
+        message: "Destination is under a compliance hold; resolve the hold before paying out.",
+      }));
+
+      const rejection = await service
+        .processPayment({
+          recipient: secret,
+          amount: 1n,
+          asset: "native",
+          onProgress: (event) => progressEvents.push(event),
+        })
+        .catch((error: unknown) => error as Error);
+
+      const serialized = JSON.stringify({ rejection, progressEvents });
+      expect(serialized).not.toContain(secret);
+      expect(serialized).not.toContain("GA7Q");
+    });
+
+    it("never surfaces hook fault details through the fail-closed result", async () => {
+      const secret = "internal treasury account GA7QYNF7SOWQXGLA";
+      setDestinationValidationHook(() => {
+        throw new Error(`policy lookup failed for ${secret}`);
+      });
+
+      const result = await validatePaymentDestination(account);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.state).toBe("unavailable");
+        expect(JSON.stringify(result)).not.toContain("policy lookup failed");
+        expect(JSON.stringify(result)).not.toContain("GA7Q");
+      }
+    });
+  });
 });
