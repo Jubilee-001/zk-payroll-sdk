@@ -6,7 +6,6 @@ import {
   resetDestinationValidationHook,
   getRegisteredDestinationValidationHook,
   validatePaymentDestination,
-  type DestinationValidationHook,
 } from "../src";
 import { validatePayoutDestination } from "../src/employees/payoutDestination";
 
@@ -55,7 +54,13 @@ describe("Destination Validation Extension Point (#531)", () => {
   describe("extension hook policy", () => {
     it("accepts destinations allowed by the organizational allowlist", async () => {
       setDestinationValidationHook((value) =>
-        value === account ? { ok: true, kind: "internal_treasury" } : { ok: false, code: "COMPANY_DESTINATION_NOT_ALLOWED", message: "Destination is not on the approved payout list." }
+        value === account
+          ? { ok: true, kind: "internal_treasury" }
+          : {
+              ok: false,
+              code: "COMPANY_DESTINATION_NOT_ALLOWED",
+              message: "Destination is not on the approved payout list.",
+            }
       );
 
       const result = await validatePaymentDestination(account);
@@ -131,7 +136,9 @@ describe("Destination Validation Extension Point (#531)", () => {
   describe("PayrollService integration", () => {
     it("exposes static hook registration and pre-flight validation", async () => {
       PayrollService.setDestinationValidationHook((value) =>
-        value === account ? { ok: true } : { ok: false, code: "COMPANY_NOT_ALLOWED", message: "Destination is not approved." }
+        value === account
+          ? { ok: true }
+          : { ok: false, code: "COMPANY_NOT_ALLOWED", message: "Destination is not approved." }
       );
 
       expect(PayrollService.getDestinationValidationHook()).toBeDefined();

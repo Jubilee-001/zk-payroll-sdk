@@ -1,8 +1,6 @@
 import { StrKey } from "@stellar/stellar-sdk";
 export type PayoutDestinationErrorCode =
-  | "DESTINATION_REQUIRED"
-  | "DESTINATION_WHITESPACE"
-  | "DESTINATION_UNSUPPORTED";
+  "DESTINATION_REQUIRED" | "DESTINATION_WHITESPACE" | "DESTINATION_UNSUPPORTED";
 export type PayoutDestinationValidation =
   | { ok: true; destination: string; kind: "account" | "muxed_account" }
   | { ok: false; code: PayoutDestinationErrorCode; message: string };

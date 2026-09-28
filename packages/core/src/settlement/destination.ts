@@ -52,10 +52,7 @@ export type DestinationWorkflowValidation =
     };
 
 /** Resolves the extension hook that should run for a workflow. */
-export type DestinationValidationHookResolver = () =>
-  | DestinationValidationHook
-  | undefined
-  | null;
+export type DestinationValidationHookResolver = () => DestinationValidationHook | undefined | null;
 
 /** Shared module-level hook registration (process-wide default). */
 let registeredHook: DestinationValidationHook | undefined;
