@@ -10,3 +10,4 @@ export * from "./errors";
 export * from "./safeBatchSubmitter";
 export * from "./runStatus";
 export * from "./periodPagination";
+export * from "./retryEligibility";

@@ -189,3 +189,61 @@ unintended batch size:
 | `pageSize` of `0`, negative, `NaN`, `Infinity`, non-integer | Throws `ValidationError` (`field: "pageSize"`) |
 | Negative or non-integer batch index    | Throws `ValidationError` (`field: "batchIndex"`) |
 | `pageSize` omitted                     | Whole collection treated as a single batch  |
+
+---
+
+# Pagination guardrails (Issue #500)
+
+Guardrails protect consumers from accidental unbounded pagination requests
+and loops when traversing remote or misbehaving paginated sources. They are
+available two ways:
+
+- `iteratePayrollPeriods()` / `collectPayrollPeriods()` already apply them to
+  payroll period history (page size validation, page budget, repeated-cursor
+  detection, abort support).
+- For **arbitrary paginated sources** (indexers, RPC endpoints, export
+  pipelines), use the generic guarded traversal:
+
+```ts
+import { collectGuardedPages, iterateGuardedPages } from "@zk-payroll/core";
+
+const records = await collectGuardedPages(fetchPage, {
+  maxPageSize: 100,   // clamp every request (default: 100)
+  maxPages: 50,       // page budget (default: 100, ceiling 10,000)
+  maxRecords: 5000,   // record budget (default: 10,000)
+  signal: controller.signal, // abort support
+});
+
+// Or stream record-by-record:
+for await (const record of iterateGuardedPages(fetchPage, { maxPages: 50 })) {
+  await ingest(record);
+}
+```
+
+## What is guarded
+
+| Risk                                   | Protection                                        |
+|----------------------------------------|---------------------------------------------------|
+| Oversized page requests                | `maxPageSize` clamp on every request               |
+| Endless page chains                    | `maxPages` budget, then a `PAGINATION_BUDGET_EXCEEDED` error |
+| Many small pages exhausting memory     | `maxRecords` budget on yielded records             |
+| Source repeating or cycling cursors    | Repeated-cursor detection (`PAGINATION_REPEATED_CURSOR`) |
+| Abandoned traversals                   | `AbortSignal` checked before fetch and before yield |
+
+All budgets are validated upfront: invalid configurations (non-integer,
+negative, or above-ceiling values) throw a `RangeError` before any page is
+fetched.
+
+## Privacy
+
+Guardrail failures are actionable without leaking payroll data: error
+messages carry stable codes and fixed text, and never echo raw cursor
+payloads, amounts, salaries, or record contents. Aborted traversals surface
+only an `AbortError` — fetched records are never included.
+
+## Building your own loop
+
+If you hand-roll a `do { page = await fetch(cursor) } while (cursor)` loop,
+resolve the same guardrails and enforce at least a page budget and
+repeated-cursor detection — or better, delegate to
+`iterateGuardedPages()`, which enforces all of them.

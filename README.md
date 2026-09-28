@@ -68,6 +68,13 @@ Wrap idempotent RPC reads with `withRpcRetry()` to retry transient failures with
 bounded exponential backoff. Validation and contract reverts are never retried.
 Use an idempotency key before applying retries to a write operation.
 
+Pagination guardrails protect consumers from accidental unbounded pagination
+requests and loops: `iterateGuardedPages()` / `collectGuardedPages()` traverse
+any paginated source under configurable page-size, page-budget, and
+record-budget caps, detect sources that repeat cursors, and support abort
+signals — with privacy-safe, actionable errors. The same protections already
+apply to `iteratePayrollPeriods()` / `collectPayrollPeriods()`.
+
 `validatePayoutDestination()` validates Stellar account and muxed-account
 destinations without including rejected values in error messages. The same
 validation runs automatically before `PayrollService` submits a payment.

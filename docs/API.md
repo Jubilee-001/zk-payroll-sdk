@@ -350,6 +350,8 @@ if (!gate.ok) {
   console.error(gate.code, gate.message); // safe to log
 }
 ```
+#### `evaluateFailedPayoutRetryEligibility(input): FailedPayoutRetryEligibility`
+Checks whether an individual failed payout is safe to retry. The input includes its normalized transaction status, failure classification, attempt count, maximum attempts, and idempotency key. Retry is allowed only for a retryable failure while attempts remain and an idempotency key is present. The result provides a stable code and generic guidance; it never returns the key or reflects raw failure details.
 
 ### `PayrollContract`
 
