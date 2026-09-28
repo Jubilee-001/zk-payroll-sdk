@@ -39,6 +39,10 @@ import {
   type SettlementReceiptValidation,
   type SettlementReceiptValidationOptions,
 } from "./settlement/receipt";
+import {
+  validatePaymentDestination,
+  type DestinationWorkflowValidation,
+} from "./settlement/destination";
 
 export {
   submitSequentialPayrollBatches,
@@ -144,6 +148,34 @@ export class PayrollService {
         error: error instanceof Error ? error.message : String(error),
       });
       throw error;
+    }
+
+    // 1b. Destination validation extension point (#531)
+    // Runs organizational destination policy (if a hook is registered) after
+    // built-in validation and before any proof generation or submission.
+    // The error path is sanitized through redactError() so the rejected
+    // destination can never surface in logs or events.
+    const destinationCheck = await validatePaymentDestination(recipient);
+    if (!destinationCheck.ok) {
+      const destinationError = new PayrollError(
+        destinationCheck.message,
+        PayrollServiceErrorCode.INVALID_RECIPIENT
+      );
+      this.logger?.warn("payment_destination_rejected", {
+        code: destinationCheck.code,
+        state: destinationCheck.state,
+        error: redactError(destinationError).message,
+      });
+      params.onProgress?.(
+        createPayrollProgressEvent({
+          operation: "payment",
+          stage: "validation",
+          message: "destination_validation_failed",
+          progress: 100,
+          metadata: { code: destinationCheck.code },
+        })
+      );
+      throw destinationError;
     }
 
     // 2. Generate ZK proof
